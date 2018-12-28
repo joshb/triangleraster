@@ -166,7 +166,7 @@ main(int argc, char *argv[])
 
 		// display frames per second
 		unsigned int fps = 1000 / ticksDiff;
-		cout << "Frames per second: " << fps << "\t\r";
+		cout << "Frames per second: " << fps << "     \r";
 	}
 
 	SDL_DestroyTexture(texture);
