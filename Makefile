@@ -1,10 +1,10 @@
 CXX=g++
-CXXFLAGS=`sdl-config --cflags`
-LDFLAGS=`sdl-config --libs`
+CXXFLAGS=`pkg-config sdl2 --cflags`
+LDFLAGS=`pkg-config sdl2 --libs`
 OBJS=main.o Color.o Rasterizer.o
 
 triangleraster:	$(OBJS)
-	$(CXX) $(LDFLAGS) $(OBJS) -o triangleraster
+	$(CXX) $(OBJS) $(LDFLAGS) -o triangleraster
 
 clean:
 	rm -f triangleraster

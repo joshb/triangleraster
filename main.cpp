@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Josh A. Beam
+ * Copyright (C) 2009-2018 Josh A. Beam
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,13 +23,17 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <cstdio>
+#include <iostream>
 #include <cmath>
-#include <SDL/SDL.h>
+#define SDL_MAIN_HANDLED
+#include <SDL2/SDL.h>
 #include "Rasterizer.h"
 
-#define WINDOW_WIDTH 320
-#define WINDOW_HEIGHT 240
+using namespace std;
+
+static const float M_PI_F = (float)M_PI;
+static const int WINDOW_WIDTH = 320;
+static const int WINDOW_HEIGHT = 240;
 
 static bool g_Running = true;
 
@@ -60,50 +64,70 @@ HandleEvent(const SDL_Event &event)
 	}
 }
 
+static void
+HandleEvents()
+{
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		HandleEvent(event);
+	}
+}
+
 int
 main(int argc, char *argv[])
 {
-	// initialize SDL
-	if(SDL_Init(SDL_INIT_VIDEO) != 0) {
-		fprintf(stderr, "SDL_Init failed\n");
+	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+		cerr << "SDL_Init failed" << endl;
 		return 1;
 	}
 
-	// create window for drawing
-	SDL_Surface *screen = SDL_SetVideoMode(WINDOW_WIDTH, WINDOW_HEIGHT, 32, SDL_HWSURFACE);
-	if(!screen) {
+	SDL_Window *window = SDL_CreateWindow("Triangle Rasterization Demo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+	if (!window) {
+		cerr << "SDL_CreateWindow failed" << endl;
 		SDL_Quit();
-		fprintf(stderr, "SDL_SetVideoMode failed\n");
 		return 1;
 	}
 
-	SDL_WM_SetCaption("Triangle Rasterization Demo - http://www.3ddrome.com/", NULL);
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
+	if (!renderer) {
+		cerr << "SDL_CreateRenderer failed" << endl;
+		SDL_Quit();
+		return 1;
+	}
+
+	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
+	if (!texture) {
+		cerr << "SDL_CreateTexture failed" << endl;
+		SDL_Quit();
+		return 1;
+	}
 
 	Rasterizer rast;
-	rast.SetFrameBuffer((uint32_t *)screen->pixels, WINDOW_WIDTH, WINDOW_HEIGHT);
-
 	float r = 0.0f;
 	unsigned int lastTicks = SDL_GetTicks();
 
 	// loop until we're done running the program
-	while(g_Running) {
-		// handle events
-		SDL_Event event;
-		while(SDL_PollEvent(&event))
-			HandleEvent(event);
+	while (g_Running) {
+		HandleEvents();
 
-		// lock surface and clear framebuffer
-		SDL_LockSurface(screen);
+		void *pixels;
+		int pitch;
+		if (SDL_LockTexture(texture, NULL, &pixels, &pitch) != 0) {
+			cerr << "SDL_LockTexture failed" << endl;
+			break;
+		}
+
+		rast.SetFrameBuffer((uint32_t *)pixels, WINDOW_WIDTH, WINDOW_HEIGHT);
 		rast.Clear();
 
 		// calculate coordinates for triangle
 		const float size = 110.0f;
-		float x1 = (WINDOW_WIDTH / 2) + cosf(r - M_PI / 6.0) * size;
-		float y1 = (WINDOW_HEIGHT / 2) + sinf(r - M_PI / 6.0) * size;
-		float x2 = (WINDOW_WIDTH / 2) + cosf(r + M_PI / 2.0) * size;
-		float y2 = (WINDOW_HEIGHT / 2) + sinf(r + M_PI / 2.0) * size;
-		float x3 = (WINDOW_WIDTH / 2) + cosf(r + M_PI + M_PI / 6.0) * size;
-		float y3 = (WINDOW_HEIGHT / 2) + sinf(r + M_PI + M_PI / 6.0) * size;
+		float x1 = (float)(WINDOW_WIDTH / 2) + cosf(r - M_PI_F / 6.0f) * size;
+		float y1 = (float)(WINDOW_HEIGHT / 2) + sinf(r - M_PI_F / 6.0f) * size;
+		float x2 = (float)(WINDOW_WIDTH / 2) + cosf(r + M_PI_F / 2.0f) * size;
+		float y2 = (float)(WINDOW_HEIGHT / 2) + sinf(r + M_PI_F / 2.0f) * size;
+		float x3 = (float)(WINDOW_WIDTH / 2) + cosf(r + M_PI_F + M_PI_F / 6.0f) * size;
+		float y3 = (float)(WINDOW_HEIGHT / 2) + sinf(r + M_PI_F + M_PI_F / 6.0f) * size;
 
 		// colors for each point of the triangle
 		Color color1(1.0f, 0.0f, 0.0f);
@@ -113,27 +137,41 @@ main(int argc, char *argv[])
 		// render triangle
 		rast.DrawTriangle(color1, x1, y1, color2, x2, y2, color3, x3, y3);
 
-		// unlock and update surface
-		SDL_UnlockSurface(screen);
-		SDL_UpdateRect(screen, 0, 0, 0, 0);
+		SDL_UnlockTexture(texture);
+
+		if (SDL_RenderClear(renderer) != 0) {
+			cerr << "SDL_RenderClear failed" << endl;
+			break;
+		}
+
+		if (SDL_RenderCopy(renderer, texture, NULL, NULL) != 0) {
+			cerr << "SDL_RenderCopy failed" << endl;
+			break;
+		}
+
+		SDL_RenderPresent(renderer);
 
 		// calculate the number of seconds that
 		// have passed since the last update
 		unsigned int ticks = SDL_GetTicks();
 		unsigned int ticksDiff = ticks - lastTicks;
-		if(ticksDiff == 0)
+		if (ticksDiff == 0) {
 			continue;
+		}
 		float time = ticksDiff / 1000.0f;
 		lastTicks = ticks;
 
 		// update rotation
-		r += M_PI / 2.0f * time;
+		r += M_PI_F / 2.0f * time;
 
 		// display frames per second
 		unsigned int fps = 1000 / ticksDiff;
-		printf("Frames per second: %u    \r", fps);
+		cout << "Frames per second: " << fps << "\t\r";
 	}
 
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
 	SDL_Quit();
 	return 0;
 }
